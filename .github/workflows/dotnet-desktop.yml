@@ -1,0 +1,48 @@
+name: .NET Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    env:
+      Solution_Name: CyberSecurity_Awareness_Bot.sln
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Find Test Project Path
+        run: |
+          $testPath = Get-ChildItem -Path . -Recurse -Filter "*.Tests.csproj" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $testPath) {
+              Write-Error "❌ No test project found!"
+              exit 1
+          }
+          $relativePath = $testPath -replace [regex]::Escape("$pwd\"), ""
+          echo "TEST_PROJECT_PATH=$relativePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+        shell: pwsh
+
+      - name: Debug - List Test Projects
+        run: |
+          Get-ChildItem -Path . -Recurse -Filter "*.Tests.csproj" | ForEach-Object { Write-Host $_.FullName }
+        shell: pwsh
+
+      - name: Restore Dependencies
+        run: dotnet restore
+
+      - name: Run Unit Tests
+        run: dotnet test ${{ env.TEST_PROJECT_PATH }} --configuration Debug --no-restore
