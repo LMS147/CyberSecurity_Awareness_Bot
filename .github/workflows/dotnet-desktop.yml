@@ -17,32 +17,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Cache NuGet Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 6.0.x # Adjust to your project's .NET version
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Find Test Project Path
+      - name: Validate Solution File
         run: |
-          $testPath = Get-ChildItem -Path . -Recurse -Filter "*.Tests.csproj" | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $testPath) {
-              Write-Error "❌ No test project found!"
-              exit 1
+          if (-not (Test-Path -Path "${{ env.Solution_Name }}")) {
+            Write-Error "❌ Solution file not found!"
+            exit 1
           }
-          $relativePath = $testPath -replace [regex]::Escape("$pwd\"), ""
-          echo "TEST_PROJECT_PATH=$relativePath" | Out-File -FilePath $env:GITHUB_ENV -Append
-        shell: pwsh
-
-      - name: Debug - List Test Projects
-        run: |
-          Get-ChildItem -Path . -Recurse -Filter "*.Tests.csproj" | ForEach-Object { Write-Host $_.FullName }
         shell: pwsh
 
       - name: Restore Dependencies
         run: dotnet restore
 
-      - name: Run Unit Tests
-        run: dotnet test ${{ env.TEST_PROJECT_PATH }} --configuration Debug --no-restore
+      - name: Run All Unit Tests
+        run: |
+          Get-ChildItem -Path . -Recurse -Filter "*.Tests.csproj" | ForEach-Object {
+            dotnet test $_.FullName --configuration Debug --no-restore
+          }
+        shell: pwsh
